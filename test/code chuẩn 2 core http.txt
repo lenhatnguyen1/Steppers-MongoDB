@@ -1,0 +1,81 @@
+#include <Arduino.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+
+const char* ssid = "lenguyen";
+const char* password = "16082001";
+const char* serverName = "https://ap-southeast-1.aws.data.mongodb-api.com/app/application-0-wjqhy/endpoint/steppers";
+
+double theta1, theta2, theta3;
+unsigned long lastTime = 0;  
+unsigned long timerDelay = 4000; 
+
+void setupClient () {
+    Serial.begin(115200);
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(1000);
+        Serial.println("Connecting to WiFi...");
+    }
+    Serial.println("Connected to WiFi");
+}
+
+void sendRequest () {
+    if ((WiFi.status() == WL_CONNECTED)) { 
+        if ((millis() - lastTime) > timerDelay) {
+            lastTime = millis();
+            HTTPClient http;
+            http.begin(serverName);
+            int httpResponseCode = http.GET();
+            if (httpResponseCode>0) {
+                String payload = http.getString();
+                DynamicJsonDocument doc(1024);
+                deserializeJson(doc, payload);
+                theta1 = doc["theta1"].as<double>();
+                theta2 = doc["theta2"].as<double>();
+                theta3 = doc["theta3"].as<double>();
+                Serial.print("theta1: ");
+                Serial.println(theta1);
+                Serial.print("theta2: ");
+                Serial.println(theta2);
+                Serial.print("theta3: ");
+                Serial.println(theta3);
+                Serial.println("--------------");
+            }
+            else {
+                Serial.print("Error code: ");
+                Serial.println(httpResponseCode);
+            }
+            http.end();
+        }
+    }
+}
+
+void Task1code( void * pvParameters ){
+    Serial.print("Task1 running on core ");
+    Serial.println(xPortGetCoreID());
+    for(;;){
+        sendRequest();
+    } 
+}
+
+void Task2code( void * pvParameters ){
+    Serial.print("Task2 running on core ");
+    Serial.println(xPortGetCoreID());
+    for(;;){
+        // Code for Task2 goes here
+    }
+}
+
+void setup() {
+    setupClient();
+    xTaskCreatePinnedToCore(Task1code, "Task1", 4096, NULL, 0, NULL, 0);                  
+    delay(500); 
+    xTaskCreatePinnedToCore(Task2code, "Task2", 4096, NULL, 1, NULL, 1);
+    delay(500); 
+}
+
+void loop() {
+  
+}
